@@ -31,6 +31,40 @@ export interface TestScenario {
   apiVersion: string
   category: Category
   environment: Environment
+  notes?: {
+    checks: string[]
+    likelyCause: string
+    toCustomer: string
+  }
+}
+
+export type AccountPlan = 'basic' | 'standard' | 'pro' | 'enterprise'
+export type AccountStatus = 'active' | 'suspended' | 'rate_limited'
+
+export interface RateLimits {
+  requestsPerSecond: number
+  requestsPerMinute: number
+  requestsPerHour: number
+  requestsPerDay: number
+}
+
+export interface Account {
+  id: string
+  name: string
+  organization: string
+  platform: Platform
+  category: Category
+  environment: Environment
+  plan: AccountPlan
+  status: AccountStatus
+  rateLimits: RateLimits
+  currentUsage: {
+    today: number
+    thisHour: number
+    thisMinute: number
+  }
+  createdAt: string
+  apiVersion: string
 }
 
 export interface RunResult {

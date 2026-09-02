@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import Landing from './pages/Landing'
 import Logs from './pages/Logs'
 import Requests from './pages/Requests'
+import Accounts from './pages/Accounts'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
               <Route path="/" element={<ProtectedRoute><Landing /></ProtectedRoute>} />
               <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
               <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
+              <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </LogsProvider>

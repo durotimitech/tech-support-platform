@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Category, Platform, HttpMethod, Environment } from '../types'
+import type { ApiLog, Category, Platform, HttpMethod, Environment } from '../types'
 import { useAuth } from '../auth/AuthContext'
 import { useLogs } from '../store/LogsContext'
 import { useTheme } from '../store/ThemeContext'
 import ThemeToggle from '../components/ThemeToggle'
+import LogModal from '../components/LogModal'
 import dishuWhite from '../assets/logos/dishu-white.svg'
 import dishuBlack from '../assets/logos/dishu-black.svg'
 
@@ -39,6 +40,8 @@ export default function Logs() {
   const { user, logout } = useAuth()
   const { logs, clearLogs } = useLogs()
   const { dark } = useTheme()
+
+  const [selectedLog, setSelectedLog] = useState<ApiLog | null>(null)
 
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<Category | 'All'>('All')
@@ -185,7 +188,11 @@ export default function Logs() {
                   <td colSpan={11} className="text-center py-12 text-text-ghost">No logs match your filters.</td>
                 </tr>
               ) : filtered.map((log) => (
-                <tr key={log.id} className="border-b border-row-border hover:bg-row-hover transition-colors">
+                <tr
+                  key={log.id}
+                  onClick={() => setSelectedLog(log)}
+                  className="border-b border-row-border hover:bg-row-hover transition-colors cursor-pointer"
+                >
                   <td className="px-3.5 py-3 text-text-faint text-[12px] font-mono whitespace-nowrap tabular-nums">
                     {formatTime(log.timestamp)}
                   </td>
@@ -233,6 +240,10 @@ export default function Logs() {
           </table>
         </div>
       </div>
+
+      {selectedLog && (
+        <LogModal log={selectedLog} onClose={() => setSelectedLog(null)} />
+      )}
     </div>
   )
 }

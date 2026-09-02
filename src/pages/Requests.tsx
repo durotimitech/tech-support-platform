@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { stripe401Scenarios } from '../data/scenarios/stripe401'
+import { stripe429Scenarios } from '../data/scenarios/stripe429'
 import { useLogs } from '../store/LogsContext'
 import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../store/ThemeContext'
@@ -141,9 +142,9 @@ function ScenarioCard({ scenario }: { scenario: TestScenario }) {
             {result.error && <span className="text-red-500 text-sm">{result.error}</span>}
           </div>
 
-          {result.responseBody && (
+          {!!result.responseBody && (
             <pre className="bg-card-dark rounded-lg p-4 text-[12px] font-mono text-text-muted overflow-x-auto max-h-60 overflow-y-auto leading-relaxed">
-              {JSON.stringify(result.responseBody, null, 2)}
+              {JSON.stringify(result.responseBody, null, 2) as string}
             </pre>
           )}
         </div>
@@ -187,13 +188,25 @@ export default function Requests() {
         <h1 className="text-3xl font-bold text-text mb-1">Test Requests</h1>
         <p className="text-text-dim text-sm mb-8">Run real API calls — results are saved to logs automatically.</p>
 
-        <section>
+        <section className="mb-10">
           <div className="flex items-center gap-3 mb-4">
             <span className="inline-block px-2 py-0.5 rounded font-mono text-[12px] font-bold bg-amber-50 text-amber-700 dark:bg-[#261c08] dark:text-amber-400">401</span>
             <h2 className="text-text font-semibold text-lg">Unauthorized — Stripe</h2>
           </div>
           <div className="flex flex-col gap-4">
             {stripe401Scenarios.map((s) => (
+              <ScenarioCard key={s.id} scenario={s} />
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="inline-block px-2 py-0.5 rounded font-mono text-[12px] font-bold bg-orange-50 text-orange-700 dark:bg-[#2a1500] dark:text-orange-400">429</span>
+            <h2 className="text-text font-semibold text-lg">Rate Limited — Stripe</h2>
+          </div>
+          <div className="flex flex-col gap-4">
+            {stripe429Scenarios.map((s) => (
               <ScenarioCard key={s.id} scenario={s} />
             ))}
           </div>

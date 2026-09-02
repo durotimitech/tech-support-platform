@@ -47,6 +47,13 @@ export default function Landing() {
             View API Logs
           </button>
 
+          <button
+            onClick={() => navigate('/accounts')}
+            className="w-56 px-9 py-3.5 bg-transparent border border-border hover:border-border-hover text-text-muted hover:text-text text-[15px] font-semibold rounded-xl transition-colors cursor-pointer"
+          >
+            Accounts
+          </button>
+
           {user?.role === 'admin' && (
             <button
               onClick={() => navigate('/requests')}
