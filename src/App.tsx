@@ -1,15 +1,29 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ThemeProvider } from './store/ThemeContext'
+import { AuthProvider } from './auth/AuthContext'
+import { LogsProvider } from './store/LogsContext'
+import ProtectedRoute from './auth/ProtectedRoute'
+import Login from './pages/Login'
 import Landing from './pages/Landing'
 import Logs from './pages/Logs'
-import './App.css'
+import Requests from './pages/Requests'
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/logs" element={<Logs />} />
-      </Routes>
+      <ThemeProvider>
+        <AuthProvider>
+          <LogsProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={<ProtectedRoute><Landing /></ProtectedRoute>} />
+              <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
+              <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </LogsProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }

@@ -1,9 +1,12 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { mockLogs } from '../data/mockLogs'
 import type { Category, Platform, HttpMethod, Environment } from '../types'
+import { useAuth } from '../auth/AuthContext'
+import { useLogs } from '../store/LogsContext'
+import { useTheme } from '../store/ThemeContext'
+import ThemeToggle from '../components/ThemeToggle'
 import dishuWhite from '../assets/logos/dishu-white.svg'
-import './Logs.css'
+import dishuBlack from '../assets/logos/dishu-black.svg'
 
 type StatusGroup = 'All' | '2xx' | '4xx' | '5xx'
 
@@ -14,24 +17,29 @@ function statusGroup(code: number): '2xx' | '4xx' | '5xx' | 'other' {
   return 'other'
 }
 
-function statusClass(code: number) {
-  const g = statusGroup(code)
-  if (g === '2xx') return 'status-2xx'
-  if (g === '4xx') return 'status-4xx'
-  if (g === '5xx') return 'status-5xx'
-  return ''
+const STATUS_CLASS: Record<string, string> = {
+  '2xx':   'bg-emerald-50 text-emerald-700 dark:bg-[#0d2218] dark:text-emerald-400',
+  '4xx':   'bg-amber-50 text-amber-700 dark:bg-[#261c08] dark:text-amber-400',
+  '5xx':   'bg-red-50 text-red-700 dark:bg-[#2a1010] dark:text-red-400',
+  'other': 'bg-card text-text-dim',
 }
 
 const METHOD_CLASS: Record<string, string> = {
-  GET: 'method-get',
-  POST: 'method-post',
-  PUT: 'method-put',
-  PATCH: 'method-patch',
-  DELETE: 'method-delete',
+  GET:    'bg-blue-50 text-blue-700 dark:bg-[#0e1e30] dark:text-blue-400',
+  POST:   'bg-emerald-50 text-emerald-700 dark:bg-[#0d2218] dark:text-emerald-400',
+  PUT:    'bg-amber-50 text-amber-700 dark:bg-[#261c08] dark:text-amber-400',
+  PATCH:  'bg-violet-50 text-violet-700 dark:bg-[#1e1040] dark:text-violet-400',
+  DELETE: 'bg-red-50 text-red-700 dark:bg-[#2a1010] dark:text-red-400',
 }
+
+const SELECT_CLS = 'bg-card border border-border rounded-lg px-3 py-2 pr-7 text-text-muted text-[13px] outline-none focus:border-brand-amber appearance-none cursor-pointer transition-colors'
 
 export default function Logs() {
   const navigate = useNavigate()
+  const { user, logout } = useAuth()
+  const { logs, clearLogs } = useLogs()
+  const { dark } = useTheme()
+
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<Category | 'All'>('All')
   const [filterPlatform, setFilterPlatform] = useState<Platform | 'All'>('All')
@@ -39,8 +47,13 @@ export default function Logs() {
   const [filterStatus, setFilterStatus] = useState<StatusGroup>('All')
   const [filterEnv, setFilterEnv] = useState<Environment | 'All'>('All')
 
+  function handleLogout() {
+    logout()
+    navigate('/login', { replace: true })
+  }
+
   const filtered = useMemo(() => {
-    return mockLogs.filter((log) => {
+    return logs.filter((log) => {
       const q = search.toLowerCase()
       const matchesSearch =
         !q ||
@@ -59,44 +72,60 @@ export default function Logs() {
         (filterStatus === 'All' || statusGroup(log.statusCode) === filterStatus)
       )
     })
-  }, [search, filterCategory, filterPlatform, filterMethod, filterStatus, filterEnv])
+  }, [logs, search, filterCategory, filterPlatform, filterMethod, filterStatus, filterEnv])
 
   function formatTime(iso: string) {
     return new Date(iso).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+      month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
     })
   }
 
   return (
-    <div className="logs-page">
-      <header className="logs-header">
-        <button className="back-btn" onClick={() => navigate('/')}>
-          <img src={dishuWhite} alt="Dishu" className="header-wordmark" />
+    <div className="min-h-screen bg-surface text-text">
+      <header className="sticky top-0 z-10 bg-surface border-b border-border flex items-center justify-between px-8 py-4">
+        <button onClick={() => navigate('/')} className="bg-transparent border-none p-0 cursor-pointer opacity-85 hover:opacity-100 transition-opacity">
+          <img src={dark ? dishuWhite : dishuBlack} alt="Dishu" className="h-6 w-auto" />
         </button>
-        <div className="logs-header-right">
-          <span className="logs-count">{filtered.length} requests</span>
+        <div className="flex items-center gap-3">
+          <span className="text-text-faint text-[13px]">{filtered.length} of {logs.length} requests</span>
+          <ThemeToggle />
+          <span className="text-text-muted text-sm font-semibold">{user?.username}</span>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-[#0e1e30] dark:text-blue-400 uppercase tracking-wider">
+            {user?.role}
+          </span>
+          <button
+            onClick={handleLogout}
+            className="text-text-faint text-[13px] px-3 py-1 rounded-md border border-border hover:text-text hover:border-border-hover transition-colors cursor-pointer bg-transparent"
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
-      <div className="logs-body">
-        <div className="logs-title-row">
-          <h1>API Logs</h1>
+      <div className="max-w-[1440px] mx-auto px-8 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold text-text">API Logs</h1>
+          {user?.role === 'admin' && logs.length > 0 && (
+            <button
+              onClick={clearLogs}
+              className="text-text-faint text-sm px-3 py-1.5 rounded-lg border border-border hover:text-red-500 hover:border-red-200 dark:hover:border-red-900 transition-colors cursor-pointer bg-transparent"
+            >
+              Clear all
+            </button>
+          )}
         </div>
 
-        <div className="logs-controls">
+        <div className="flex flex-col gap-3 mb-6">
           <input
-            className="search-input"
             type="text"
-            placeholder="Search by request ID, endpoint, org, error code..."
+            placeholder="Search by request ID, endpoint, org, error code…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-card border border-border rounded-lg px-3.5 py-2.5 text-text text-sm outline-none placeholder:text-text-ghost focus:border-brand-amber transition-colors"
           />
-          <div className="filters">
-            <select value={filterPlatform} onChange={(e) => setFilterPlatform(e.target.value as Platform | 'All')}>
+          <div className="flex gap-2.5 flex-wrap">
+            <select value={filterPlatform} onChange={(e) => setFilterPlatform(e.target.value as Platform | 'All')} className={SELECT_CLS}>
               <option value="All">All Platforms</option>
               <option value="Stripe">Stripe</option>
               <option value="Airbnb">Airbnb</option>
@@ -105,7 +134,7 @@ export default function Logs() {
               <option value="Zendesk">Zendesk</option>
               <option value="HubSpot">HubSpot</option>
             </select>
-            <select value={filterMethod} onChange={(e) => setFilterMethod(e.target.value as HttpMethod | 'All')}>
+            <select value={filterMethod} onChange={(e) => setFilterMethod(e.target.value as HttpMethod | 'All')} className={SELECT_CLS}>
               <option value="All">All Methods</option>
               <option value="GET">GET</option>
               <option value="POST">POST</option>
@@ -113,18 +142,18 @@ export default function Logs() {
               <option value="PATCH">PATCH</option>
               <option value="DELETE">DELETE</option>
             </select>
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as StatusGroup)}>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as StatusGroup)} className={SELECT_CLS}>
               <option value="All">All Statuses</option>
               <option value="2xx">2xx Success</option>
               <option value="4xx">4xx Client Error</option>
               <option value="5xx">5xx Server Error</option>
             </select>
-            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value as Category | 'All')}>
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value as Category | 'All')} className={SELECT_CLS}>
               <option value="All">All Categories</option>
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
             </select>
-            <select value={filterEnv} onChange={(e) => setFilterEnv(e.target.value as Environment | 'All')}>
+            <select value={filterEnv} onChange={(e) => setFilterEnv(e.target.value as Environment | 'All')} className={SELECT_CLS}>
               <option value="All">All Environments</option>
               <option value="production">Production</option>
               <option value="sandbox">Sandbox</option>
@@ -132,69 +161,74 @@ export default function Logs() {
           </div>
         </div>
 
-        <div className="logs-table-wrapper">
-          <table className="logs-table">
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full border-collapse text-[13px]">
             <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Request ID</th>
-                <th>Method</th>
-                <th>Endpoint</th>
-                <th>Status</th>
-                <th>Time</th>
-                <th>Platform</th>
-                <th>Cat</th>
-                <th>Org</th>
-                <th>Env</th>
-                <th>Error</th>
+              <tr className="bg-card-dark">
+                {['Timestamp','Request ID','Method','Endpoint','Status','Time','Platform','Cat','Org','Env','Error'].map((h) => (
+                  <th key={h} className="text-left px-3.5 py-3 text-[10.5px] font-semibold uppercase tracking-wider text-text-faint border-b border-border whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {logs.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="no-results">No logs match your filters.</td>
+                  <td colSpan={11} className="text-center py-16 text-text-ghost">
+                    <p className="text-base mb-1">No logs yet</p>
+                    <p className="text-sm">Run a test request to see results here.</p>
+                  </td>
                 </tr>
-              ) : (
-                filtered.map((log) => (
-                  <tr key={log.id} className={log.errorCode ? 'row-error' : ''}>
-                    <td className="ts-cell">{formatTime(log.timestamp)}</td>
-                    <td className="reqid-cell">{log.requestId}</td>
-                    <td>
-                      <span className={`method-badge ${METHOD_CLASS[log.method]}`}>
-                        {log.method}
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="text-center py-12 text-text-ghost">No logs match your filters.</td>
+                </tr>
+              ) : filtered.map((log) => (
+                <tr key={log.id} className="border-b border-row-border hover:bg-row-hover transition-colors">
+                  <td className="px-3.5 py-3 text-text-faint text-[12px] font-mono whitespace-nowrap tabular-nums">
+                    {formatTime(log.timestamp)}
+                  </td>
+                  <td className="px-3.5 py-3 font-mono text-[12px] text-text-faint whitespace-nowrap">
+                    {log.requestId}
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <span className={`inline-block px-1.5 py-0.5 rounded font-mono text-[11px] font-bold tracking-wide ${METHOD_CLASS[log.method]}`}>
+                      {log.method}
+                    </span>
+                  </td>
+                  <td className="px-3.5 py-3 font-mono text-[12px] text-text-muted max-w-[280px] truncate">
+                    {log.endpoint}
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded font-mono text-[12px] font-bold ${STATUS_CLASS[statusGroup(log.statusCode)]}`}>
+                      {log.statusCode}
+                    </span>
+                  </td>
+                  <td className="px-3.5 py-3 text-text-muted tabular-nums whitespace-nowrap">{log.responseTime}ms</td>
+                  <td className="px-3.5 py-3 text-text-muted whitespace-nowrap">{log.platform}</td>
+                  <td className="px-3.5 py-3">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10.5px] font-bold tracking-wide ${log.category === 'B2B' ? 'bg-green-50 text-green-700 dark:bg-[#0e2318] dark:text-green-400' : 'bg-orange-50 text-orange-700 dark:bg-[#2a1a0a] dark:text-amber-400'}`}>
+                      {log.category}
+                    </span>
+                  </td>
+                  <td className="px-3.5 py-3 text-text-muted text-[12.5px] whitespace-nowrap">{log.organization}</td>
+                  <td className="px-3.5 py-3">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap ${log.environment === 'production' ? 'bg-blue-50 text-blue-700 dark:bg-[#0e1e30] dark:text-blue-400' : 'bg-slate-100 text-slate-500 dark:bg-[#1e1e1e] dark:text-slate-500'}`}>
+                      {log.environment}
+                    </span>
+                  </td>
+                  <td className="px-3.5 py-3 max-w-[180px]">
+                    {log.errorCode ? (
+                      <span title={log.errorMessage} className="font-mono text-[11.5px] text-red-500 dark:text-red-400 cursor-help truncate block">
+                        {log.errorCode}
                       </span>
-                    </td>
-                    <td className="endpoint-cell">{log.endpoint}</td>
-                    <td>
-                      <span className={`status-badge ${statusClass(log.statusCode)}`}>
-                        {log.statusCode}
-                      </span>
-                    </td>
-                    <td className="time-cell">{log.responseTime}ms</td>
-                    <td>{log.platform}</td>
-                    <td>
-                      <span className={`category-badge ${log.category === 'B2B' ? 'cat-b2b' : 'cat-b2c'}`}>
-                        {log.category}
-                      </span>
-                    </td>
-                    <td className="org-cell">{log.organization}</td>
-                    <td>
-                      <span className={`env-badge ${log.environment === 'production' ? 'env-prod' : 'env-sandbox'}`}>
-                        {log.environment}
-                      </span>
-                    </td>
-                    <td className="error-cell">
-                      {log.errorCode ? (
-                        <span className="error-code" title={log.errorMessage}>
-                          {log.errorCode}
-                        </span>
-                      ) : (
-                        <span className="no-error">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
+                    ) : (
+                      <span className="text-text-ghost">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

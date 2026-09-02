@@ -19,3 +19,26 @@ export interface ApiLog {
   errorCode?: string
   errorMessage?: string
 }
+
+export interface TestScenario {
+  id: string
+  title: string
+  description: string
+  platform: Platform
+  method: HttpMethod
+  url: string
+  headers: Record<string, string>
+  apiVersion: string
+  category: Category
+  environment: Environment
+}
+
+export interface RunResult {
+  scenarioId: string
+  statusCode: number
+  responseTime: number
+  responseBody: unknown
+  requestId: string
+  timestamp: string
+  error?: string
+}
