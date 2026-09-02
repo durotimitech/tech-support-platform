@@ -7,6 +7,32 @@ export interface Playbook {
 
 // Look up by errorCode first, fall back to statusCode string
 const playbooks: Record<string, Playbook> = {
+  // ── Billing ──────────────────────────────────────────────────────────
+  invoice_double_usage: {
+    title: 'Invoice Showing Double Usage',
+    checks: [
+      'Pull the raw usage events for the billing period — look for duplicate event IDs or timestamps that are suspiciously close together.',
+      'Check for duplicate event ingestion: are usage records being submitted from two integration points (e.g. both server and a webhook handler)?',
+      'Check if retry logic is firing without idempotency keys — a failed request that retries can create two usage records.',
+      'Compare the invoice line items against the expected usage source of truth for that period.',
+    ],
+    likelyCause: 'Duplicate events sent to the API, or a double-counting bug in how usage was aggregated — often caused by retry logic without idempotency keys.',
+    toCustomer: "I'm looking into the raw usage events behind this invoice now. If I find duplicates, I'll confirm the cause — this can happen if usage events are submitted twice, sometimes due to retry logic without idempotency keys.",
+  },
+
+  // ── Webhooks ─────────────────────────────────────────────────────────
+  webhook_endpoint_down: {
+    title: 'Webhook Endpoint Stopped Receiving Events',
+    checks: [
+      'Check webhook delivery logs for failed delivery attempts — look at the error code and response body returned by their endpoint.',
+      'Confirm their endpoint URL is still correct and publicly reachable — not localhost or a private IP.',
+      'Ask if their SSL certificate has changed recently — an expired or mismatched cert will cause delivery failures.',
+      'Ask about recent firewall or infra changes on their side that may be blocking inbound requests from Stripe IPs.',
+    ],
+    likelyCause: "Their endpoint is failing to respond — timeout, wrong status code, or cert issue — so deliveries are failing silently.",
+    toCustomer: "I can see delivery attempts are failing on our side with [error]. Can you confirm your endpoint is still live and returning a 2xx response? A common cause is the endpoint timing out or a change to your server's SSL certificate.",
+  },
+
   // ── 401 ─────────────────────────────────────────────────────────────
   api_key_invalid: {
     title: 'Invalid API Key',
@@ -84,6 +110,17 @@ const playbooks: Record<string, Playbook> = {
   },
 
   // ── Fallback by status code ──────────────────────────────────────────
+  '400': {
+    title: 'Bad Request — Payload Issue',
+    checks: [
+      'Get the exact request body and the full error response — 400s usually include a message field explaining what\'s wrong.',
+      'Compare the payload against the required fields in the API docs for that endpoint.',
+      'Check field types: a string where an integer is expected (or vice versa) will 400.',
+      'Look for invalid enum values — e.g. an unrecognised currency code or status string.',
+    ],
+    likelyCause: 'Missing required field, wrong data type, or invalid value in the request body.',
+    toCustomer: 'Can you share the exact request body and the full error message you\'re getting back? 400 errors usually include specifics — for example it might say a required field is missing or a value doesn\'t match the expected format.',
+  },
   '401': {
     title: 'Authentication Failed',
     checks: [

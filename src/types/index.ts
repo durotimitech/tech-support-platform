@@ -31,6 +31,8 @@ export interface TestScenario {
   apiVersion: string
   category: Category
   environment: Environment
+  runCount?: number
+  logEndpoint?: string
   notes?: {
     checks: string[]
     likelyCause: string

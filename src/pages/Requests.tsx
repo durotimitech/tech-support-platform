@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { stripe400Scenarios } from '../data/scenarios/stripe400'
 import { stripe401Scenarios } from '../data/scenarios/stripe401'
 import { stripe429Scenarios } from '../data/scenarios/stripe429'
+import { stripeBillingScenarios } from '../data/scenarios/stripeBilling'
+import { stripeWebhookScenarios } from '../data/scenarios/stripeWebhooks'
+import { generateNoiseForRun } from '../data/randomLogs'
 import { useLogs } from '../store/LogsContext'
 import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../store/ThemeContext'
@@ -64,21 +68,19 @@ function StatusBadge({ code }: { code: number }) {
 
 function ScenarioCard({ scenario }: { scenario: TestScenario }) {
   const { addLog } = useLogs()
-  const [result, setResult] = useState<RunResult | null>(null)
+  const [results, setResults] = useState<RunResult[]>([])
   const [running, setRunning] = useState(false)
 
-  async function handleRun() {
-    setRunning(true)
-    setResult(null)
-    const res = await runScenario(scenario)
+  const runCount = scenario.runCount ?? 1
 
+  function buildLog(res: RunResult, requestId: string, timestampOverride?: string): ApiLog {
     const { code, message } = extractError(res.responseBody)
-    const log: ApiLog = {
+    return {
       id: crypto.randomUUID(),
-      requestId: res.requestId,
-      timestamp: res.timestamp,
+      requestId,
+      timestamp: timestampOverride ?? res.timestamp,
       method: scenario.method,
-      endpoint: new URL(scenario.url).pathname,
+      endpoint: scenario.logEndpoint ?? new URL(scenario.url).pathname,
       statusCode: res.statusCode,
       responseTime: res.responseTime,
       platform: scenario.platform,
@@ -89,8 +91,44 @@ function ScenarioCard({ scenario }: { scenario: TestScenario }) {
       errorCode: code,
       errorMessage: message,
     }
-    addLog(log)
-    setResult(res)
+  }
+
+  async function handleRun() {
+    setRunning(true)
+    setResults([])
+    const runs: RunResult[] = []
+
+    for (let i = 0; i < runCount; i++) {
+      // Fire main request + 3 historical copies concurrently
+      const [res, h1, h2, h3] = await Promise.all([
+        runScenario(scenario),
+        runScenario(scenario),
+        runScenario(scenario),
+        runScenario(scenario),
+      ])
+
+      // Shared trace ID across all 4 entries
+      const traceId = res.requestId
+
+      const now = new Date(res.timestamp)
+      const offset = (mins: number) => new Date(now.getTime() - mins * 60_000).toISOString()
+
+      // Log historical copies first (oldest → newest) so they sort naturally
+      addLog(buildLog(h3, traceId, offset(15)))
+      generateNoiseForRun(offset(15)).forEach(addLog)
+      addLog(buildLog(h2, traceId, offset(10)))
+      generateNoiseForRun(offset(10)).forEach(addLog)
+      addLog(buildLog(h1, traceId, offset(5)))
+      generateNoiseForRun(offset(5)).forEach(addLog)
+
+      // Log the live request last
+      addLog(buildLog(res, traceId))
+      generateNoiseForRun(res.timestamp).forEach(addLog)
+
+      runs.push(res)
+    }
+
+    setResults(runs)
     setRunning(false)
   }
 
@@ -132,21 +170,33 @@ function ScenarioCard({ scenario }: { scenario: TestScenario }) {
         </div>
       </div>
 
-      {/* Result */}
-      {result && (
+      {/* Results */}
+      {results.length > 0 && (
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <StatusBadge code={result.statusCode} />
-            <span className="text-text-dim text-sm">{result.responseTime}ms</span>
-            <span className="text-emerald-600 dark:text-emerald-600 text-[12px]">saved to logs</span>
-            {result.error && <span className="text-red-500 text-sm">{result.error}</span>}
-          </div>
-
-          {!!result.responseBody && (
-            <pre className="bg-card-dark rounded-lg p-4 text-[12px] font-mono text-text-muted overflow-x-auto max-h-60 overflow-y-auto leading-relaxed">
-              {JSON.stringify(result.responseBody, null, 2) as string}
-            </pre>
+          {runCount > 1 && (
+            <p className="text-[12px] text-amber-600 dark:text-amber-400 font-semibold">
+              {runCount} requests fired — {runCount} entries logged (simulating duplicate submission)
+            </p>
           )}
+          {results.map((res, i) => (
+            <div key={i} className="flex flex-col gap-2">
+              {runCount > 1 && (
+                <span className="text-[11px] text-text-faint font-mono">Request {i + 1}</span>
+              )}
+              <div className="flex items-center gap-3 flex-wrap">
+                <StatusBadge code={res.statusCode} />
+                <span className="text-text-dim text-sm">{res.responseTime}ms</span>
+                <span className="font-mono text-[12px] text-text-faint bg-card-dark px-2 py-0.5 rounded select-all">{res.requestId}</span>
+                <span className="text-emerald-600 dark:text-emerald-600 text-[12px]">saved to logs</span>
+                {res.error && <span className="text-red-500 text-sm">{res.error}</span>}
+              </div>
+              {!!res.responseBody && (
+                <pre className="bg-card-dark rounded-lg p-4 text-[12px] font-mono text-text-muted overflow-x-auto max-h-48 overflow-y-auto leading-relaxed">
+                  {JSON.stringify(res.responseBody, null, 2) as string}
+                </pre>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -190,6 +240,18 @@ export default function Requests() {
 
         <section className="mb-10">
           <div className="flex items-center gap-3 mb-4">
+            <span className="inline-block px-2 py-0.5 rounded font-mono text-[12px] font-bold bg-red-50 text-red-700 dark:bg-[#2a1010] dark:text-red-400">400</span>
+            <h2 className="text-text font-semibold text-lg">Bad Request — Stripe</h2>
+          </div>
+          <div className="flex flex-col gap-4">
+            {stripe400Scenarios.map((s) => (
+              <ScenarioCard key={s.id} scenario={s} />
+            ))}
+          </div>
+        </section>
+
+        <section className="mb-10">
+          <div className="flex items-center gap-3 mb-4">
             <span className="inline-block px-2 py-0.5 rounded font-mono text-[12px] font-bold bg-amber-50 text-amber-700 dark:bg-[#261c08] dark:text-amber-400">401</span>
             <h2 className="text-text font-semibold text-lg">Unauthorized — Stripe</h2>
           </div>
@@ -200,13 +262,37 @@ export default function Requests() {
           </div>
         </section>
 
-        <section>
+        <section className="mb-10">
           <div className="flex items-center gap-3 mb-4">
             <span className="inline-block px-2 py-0.5 rounded font-mono text-[12px] font-bold bg-orange-50 text-orange-700 dark:bg-[#2a1500] dark:text-orange-400">429</span>
             <h2 className="text-text font-semibold text-lg">Rate Limited — Stripe</h2>
           </div>
           <div className="flex flex-col gap-4">
             {stripe429Scenarios.map((s) => (
+              <ScenarioCard key={s.id} scenario={s} />
+            ))}
+          </div>
+        </section>
+
+        <section className="mb-10">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="inline-block px-2 py-0.5 rounded font-mono text-[12px] font-bold bg-violet-50 text-violet-700 dark:bg-[#1e1040] dark:text-violet-400">Billing</span>
+            <h2 className="text-text font-semibold text-lg">Billing — Stripe</h2>
+          </div>
+          <div className="flex flex-col gap-4">
+            {stripeBillingScenarios.map((s) => (
+              <ScenarioCard key={s.id} scenario={s} />
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="inline-block px-2 py-0.5 rounded font-mono text-[12px] font-bold bg-red-50 text-red-700 dark:bg-[#2a1010] dark:text-red-400">503</span>
+            <h2 className="text-text font-semibold text-lg">Webhooks — Stripe</h2>
+          </div>
+          <div className="flex flex-col gap-4">
+            {stripeWebhookScenarios.map((s) => (
               <ScenarioCard key={s.id} scenario={s} />
             ))}
           </div>
